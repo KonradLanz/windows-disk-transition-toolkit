@@ -35,7 +35,6 @@ if (Test-Path $configFile) {
 }
 
 # Helper: Read-Host mit Default-Wert in eckigen Klammern
-# Leere Eingabe (Enter) uebernimmt den Default
 function Read-Default {
     param([string]$Prompt, [string]$Default = '')
     $display = if ($Default -ne '') { "$Prompt [$Default]" } else { $Prompt }
@@ -63,7 +62,6 @@ if ($nasShare -ne '') {
 $localOutput = Read-Default 'Lokaler Ausgabepfad (z.B. C:\Temp oder G:\USB-STICK\TEMP) - leer = NAS' $prev.LocalOutput
 $localTemp   = Read-Default 'Lokaler Temp-Ordner fuer Zwischendateien' $prev.LocalTemp
 
-# Fallback: kein NAS, kein LocalOutput -> LocalTemp
 if ($nasShare -eq '' -and $localOutput -eq '') {
     $localOutput = $localTemp
     Write-Host "[INFO] Kein NAS und kein LocalOutput - verwende LocalTemp: $localOutput" -ForegroundColor Yellow
@@ -73,23 +71,25 @@ $githubUser = Read-Default 'GitHub username' $prev.GitHubUser
 $repoName   = Read-Default 'GitHub repo name' $prev.RepoName
 $repoBase   = Read-Default 'Lokale Basis fuer geklonte Repos' $prev.RepoBase
 
-$content = @"
-# config.local.ps1 - automatisch generiert von setup.ps1
-# NICHT einchecken (.gitignore)
+# Werte als Literale schreiben - KEIN Here-String wegen Backslash-Escaping
+# Jede Zeile einzeln zusammenbauen damit PS keine Backslashes verdoppelt
+$lines = @(
+    '# config.local.ps1 - automatisch generiert von setup.ps1'
+    '# NICHT einchecken (.gitignore)'
+    ''
+    '$Config = [pscustomobject]@{'
+    ('    NasShare    = ' + "'$nasShare'")
+    ('    NasTarget   = ' + "'$nasTarget'")
+    ('    DriveLetter = ' + "'$driveLetter'")
+    ('    LocalTemp   = ' + "'$localTemp'")
+    ('    LocalOutput = ' + "'$localOutput'")
+    ('    GitHubUser  = ' + "'$githubUser'")
+    ('    RepoName    = ' + "'$repoName'")
+    ('    RepoBase    = ' + "'$repoBase'")
+    '}'
+)
+$lines | Set-Content -Path $configFile -Encoding UTF8
 
-`$Config = [pscustomobject]@{
-    NasShare    = '$nasShare'
-    NasTarget   = '$nasTarget'
-    DriveLetter = '$driveLetter'
-    LocalTemp   = '$localTemp'
-    LocalOutput = '$localOutput'
-    GitHubUser  = '$githubUser'
-    RepoName    = '$repoName'
-    RepoBase    = '$repoBase'
-}
-"@
-
-$content | Set-Content -Path $configFile -Encoding UTF8
 Write-Host ''
 Write-Host "config.local.ps1 geschrieben: $configFile" -ForegroundColor Green
 
