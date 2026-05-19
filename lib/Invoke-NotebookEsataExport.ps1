@@ -4,29 +4,38 @@ function Invoke-NotebookEsataExport {
         [int]$DiskNumber = 1
     )
 
-    $cred      = Get-CredentialCache -CacheKey "nas" -Message "NAS-Zugangsdaten fuer eSATA-Export"
-    $stamp     = Get-Date -Format "yyyyMMdd-HHmmss"
+    $stamp     = Get-Date -Format 'yyyyMMdd-HHmmss'
     $shareRoot = $Config.NasShare
     $targetRel = $Config.NasTarget
     $drive     = $Config.DriveLetter
+    $localOut  = $Config.LocalOutput   # z.B. C:\Temp oder G:\USB-STICK\TEMP
 
-    try { Remove-PSDrive -Name $drive -Force -ErrorAction SilentlyContinue } catch {}
-    New-PSDrive -Name $drive -PSProvider FileSystem -Root $shareRoot -Credential $cred -Scope Global | Out-Null
-
-    $runDir = Join-Path "${drive}:\$targetRel" "esata-disk${DiskNumber}-analysis_$stamp"
-    New-Item -Path $runDir -ItemType Directory -Force | Out-Null
+    # Ausgabeverzeichnis: lokaler Pfad hat Vorrang wenn angegeben, sonst NAS
+    if ($localOut -and $localOut -ne '') {
+        $runDir = Join-Path $localOut ("esata-disk${DiskNumber}-analysis_$stamp")
+        New-Item -Path $runDir -ItemType Directory -Force | Out-Null
+        Write-Host "[INFO] Ausgabe lokal: $runDir" -ForegroundColor Cyan
+    } else {
+        $cred = Get-CredentialCache -CacheKey 'nas' -Message 'NAS-Zugangsdaten fuer eSATA-Export'
+        try { Remove-PSDrive -Name $drive -Force -ErrorAction SilentlyContinue } catch {}
+        New-PSDrive -Name $drive -PSProvider FileSystem -Root $shareRoot `
+            -Credential $cred -Scope Global -ErrorAction Stop | Out-Null
+        $runDir = Join-Path "${drive}:\$targetRel" ("esata-disk${DiskNumber}-analysis_$stamp")
+        New-Item -Path $runDir -ItemType Directory -Force | Out-Null
+        Write-Host "[INFO] Ausgabe NAS: $runDir" -ForegroundColor Cyan
+    }
 
     $disk  = Get-Disk -Number $DiskNumber
     $parts = Get-Partition -DiskNumber $DiskNumber
 
-    $disk | Format-List * | Out-File (Join-Path $runDir "disk.txt")
+    $disk | Format-List * | Out-File (Join-Path $runDir 'disk.txt')
 
     $parts | Format-Table * -AutoSize | Out-String |
-        Out-File (Join-Path $runDir "partitions-full.txt")
+        Out-File (Join-Path $runDir 'partitions-full.txt')
 
     $parts | Select-Object PartitionNumber, DriveLetter, Offset, Size, Type, MbrType, GptType |
         Format-Table -AutoSize | Out-String |
-        Out-File (Join-Path $runDir "partitions-summary.txt")
+        Out-File (Join-Path $runDir 'partitions-summary.txt')
 
     $map = $parts | ForEach-Object {
         $p = $_
@@ -47,31 +56,31 @@ function Invoke-NotebookEsataExport {
         }
     }
 
-    $map | Format-Table -AutoSize | Out-String | Out-File (Join-Path $runDir "partition-volume-map.txt")
-    $map | Export-Csv (Join-Path $runDir "partition-volume-map.csv") -NoTypeInformation -Encoding UTF8
+    $map | Format-Table -AutoSize | Out-String | Out-File (Join-Path $runDir 'partition-volume-map.txt')
+    $map | Export-Csv (Join-Path $runDir 'partition-volume-map.csv') -NoTypeInformation -Encoding UTF8
 
     $parts | Select-Object PartitionNumber, DiskPath, Offset, Size | Format-List |
-        Out-File (Join-Path $runDir "partition-paths.txt")
+        Out-File (Join-Path $runDir 'partition-paths.txt')
 
     $letters = $parts | Where-Object { $_.DriveLetter } | Select-Object -ExpandProperty DriveLetter
     if ($letters) {
         Get-Volume | Where-Object { $_.DriveLetter -in $letters } | Format-List * |
-            Out-File (Join-Path $runDir "volumes-on-disk.txt")
+            Out-File (Join-Path $runDir 'volumes-on-disk.txt')
     }
 
     foreach ($p in ($parts | Where-Object { $_.DriveLetter })) {
         $letter = $p.DriveLetter
-        $dst = Join-Path $runDir ("listing-" + $letter)
+        $dst = Join-Path $runDir ('listing-' + $letter)
         New-Item -Path $dst -ItemType Directory -Force | Out-Null
         try {
             Get-ChildItem -LiteralPath "${letter}:\" -Force -ErrorAction SilentlyContinue |
                 Select-Object Name, FullName, Length, LastWriteTime, Attributes |
-                Format-List | Out-File (Join-Path $dst "root-listing.txt")
-        } catch { $_ | Out-String | Out-File (Join-Path $dst "root-listing-error.txt") }
+                Format-List | Out-File (Join-Path $dst 'root-listing.txt')
+        } catch { $_ | Out-String | Out-File (Join-Path $dst 'root-listing-error.txt') }
 
-        foreach ($special in @("Recovery","Recovery\\WindowsRE","Boot","EFI","System Volume Information")) {
+        foreach ($special in @('Recovery', 'Recovery\WindowsRE', 'Boot', 'EFI', 'System Volume Information')) {
             $path = Join-Path "${letter}:\" $special
-            $safe = ($special -replace '[\\/:*?""<>| ]','_')
+            $safe = $special -replace '[\/:*?"<>| ]', '_'
             try {
                 if (Test-Path -LiteralPath $path) {
                     Get-ChildItem -LiteralPath $path -Force -ErrorAction SilentlyContinue |
@@ -92,12 +101,14 @@ function Invoke-NotebookEsataExport {
         NumberOfPartitions = $disk.NumberOfPartitions
         SizeGB             = [math]::Round($disk.Size / 1GB, 2)
         Location           = $disk.Location
-    } | Format-List | Out-File (Join-Path $runDir "disk-summary.txt")
+    } | Format-List | Out-File (Join-Path $runDir 'disk-summary.txt')
 
-    Write-Host ""
-    Write-Host "eSATA Export abgeschlossen nach:" -ForegroundColor Green
+    Write-Host ''
+    Write-Host 'eSATA Export abgeschlossen nach:' -ForegroundColor Green
     Write-Host $runDir -ForegroundColor Yellow
-    Write-Host ""
+    Write-Host ''
 
-    try { Remove-PSDrive -Name $drive -Force -ErrorAction SilentlyContinue } catch {}
+    if (-not ($localOut -and $localOut -ne '')) {
+        try { Remove-PSDrive -Name $drive -Force -ErrorAction SilentlyContinue } catch {}
+    }
 }
