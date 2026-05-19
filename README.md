@@ -21,7 +21,22 @@ Windows-Taste -> PowerShell -> Rechtsklick -> Als Administrator ausfuehren
 Set-ExecutionPolicy Bypass -Scope Process -Force
 ```
 
-### Schritt 3 - Bootstrap starten
+### Schritt 3a - Bootstrap vom NAS starten (empfohlen)
+
+Wenn das NAS bereits als `Z:` gemountet ist:
+
+```powershell
+.\Bootstrap-HpPro.ps1
+```
+
+Oder direkt vom NAS (Z: wird dabei neu gemountet):
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force
+& 'Z:\bootstrap\Bootstrap-HpPro.ps1'
+```
+
+### Schritt 3b - Bootstrap von GitHub starten (Repo muss public sein)
 
 ```powershell
 iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/KonradLanz/windows-disk-transition-toolkit/main/Bootstrap-HpPro.ps1'))
@@ -29,14 +44,16 @@ iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.co
 
 Das Script installiert `git` automatisch, klont beide Repos nach `%USERPROFILE%\github\` und zeigt den naechsten Schritt.
 
-### Mit NAS direkt verbinden
+### Mit NAS-Mount in einem Schritt
 
 ```powershell
-$s = 'https://raw.githubusercontent.com/KonradLanz/windows-disk-transition-toolkit/main/Bootstrap-HpPro.ps1'
-& ([scriptblock]::Create((New-Object Net.WebClient).DownloadString($s))) -NasShare '\\<nas-hostname>\<share>'
+.\Bootstrap-HpPro.ps1 -NasShare "\\nas-hostname\sharename"
 ```
 
-> `<nas-hostname>` und `<share>` durch eigenen NAS-Pfad ersetzen.
+> **Wichtig - Backslash-Syntax:** Genau **zwei** Backslashes vorne, **kein** Backslash am Ende.
+> - ✅ Richtig:  `"\\nas.example.com\Software"`
+> - ❌ Falsch:  `"\\\\nas.example.com\\Software\"`  (zu viele Backslashes)
+> - ❌ Falsch:  `"\\nas.example.com\Software\"`    (Backslash am Ende)
 
 ---
 
@@ -54,7 +71,7 @@ Oder mit NAS-Mount in einem Schritt:
 ```powershell
 cd "$env:USERPROFILE\github\windows-disk-transition-toolkit"
 .\tools\Search-Truncations.ps1 `
-    -NasShare '\\<nas-hostname>\<share>' `
+    -NasShare "\\nas-hostname\sharename" `
     -SearchBase 'ISOs\Windows10HpPro' `
     -Dirs @('ordner-1','ordner-2')
 ```
@@ -83,7 +100,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 |---|---|
 | 1 | PS-Version anzeigen |
 | 2 | winget pruefen |
-| 3 | git installieren falls fehlt |
+| 3 | git installieren falls fehlt (nach Install: PS neu starten, dann nochmal starten) |
 | 4 | Repos nach `%USERPROFILE%\github\` klonen / aktualisieren |
 | 5 | NAS mounten (optional, per `-NasShare` Parameter) |
 
@@ -93,7 +110,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 
 ```
 windows-disk-transition-toolkit/
-├── Bootstrap-HpPro.ps1          <- Hier starten
+├── Bootstrap-HpPro.ps1          <- Hier starten (lokal oder vom NAS)
 ├── tools/
 │   └── Search-Truncations.ps1  <- Truncation-Suche auf NAS
 ├── bootstrap/
