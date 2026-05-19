@@ -1,50 +1,81 @@
 # setup.ps1
 # Interaktives Setup - erstellt config.local.ps1
+# Letzte Eingaben werden als Default vorgeschlagen: [letzter Wert] -> Enter = uebernehmen
 # PS 5.1 kompatibel
 
 param([switch]$Force)
 
 $configFile = Join-Path $PSScriptRoot 'config.local.ps1'
-if ((Test-Path $configFile) -and -not $Force) {
-    Write-Host '[INFO] config.local.ps1 bereits vorhanden. -Force zum Ueberschreiben.' -ForegroundColor Cyan
-    return
+
+# Letzte Werte laden falls vorhanden
+$prev = [pscustomobject]@{
+    NasShare    = ''
+    NasTarget   = ''
+    DriveLetter = 'Z'
+    LocalTemp   = 'C:\Temp'
+    LocalOutput = ''
+    GitHubUser  = ''
+    RepoName    = 'windows-disk-transition-toolkit'
+    RepoBase    = 'C:\Tools'
+}
+if (Test-Path $configFile) {
+    if (-not $Force) {
+        Write-Host '[INFO] config.local.ps1 gefunden - Werte werden als Vorschlag verwendet.' -ForegroundColor Cyan
+        Write-Host '       -Force zum kompletten Neustart ohne Vorschlaege.' -ForegroundColor Gray
+        Write-Host ''
+    }
+    try { . $configFile } catch {}
+    if ($Config) {
+        foreach ($p in $prev.PSObject.Properties.Name) {
+            if ($Config.PSObject.Properties[$p]) {
+                $prev.$p = $Config.$p
+            }
+        }
+    }
+}
+
+# Helper: Read-Host mit Default-Wert in eckigen Klammern
+# Leere Eingabe (Enter) uebernimmt den Default
+function Read-Default {
+    param([string]$Prompt, [string]$Default = '')
+    $display = if ($Default -ne '') { "$Prompt [$Default]" } else { $Prompt }
+    $val = Read-Host $display
+    if ($val -eq '') { $Default } else { $val }
 }
 
 Write-Host ''
 Write-Host '=== Setup: Windows Disk Transition Toolkit ===' -ForegroundColor Cyan
 Write-Host ''
-Write-Host 'Ausgabeziel: entweder NAS (UNC-Pfad) ODER lokaler Pfad (z.B. C:\Temp oder G:\USB-STICK\TEMP)' -ForegroundColor Yellow
+Write-Host 'Ausgabeziel: NAS (UNC) ODER lokaler Pfad (z.B. C:\Temp oder G:\USB-STICK\TEMP)' -ForegroundColor Yellow
 Write-Host 'Wird LocalOutput angegeben, wird NAS komplett uebersprungen.' -ForegroundColor Gray
+Write-Host 'Enter = letzten Wert uebernehmen.' -ForegroundColor Gray
 Write-Host ''
 
-$nasShare   = Read-Host 'NAS share root (z.B. \\\\nas\\Software) - leer lassen wenn lokal'
-$nasTarget  = ''
-$driveLetter = 'Z'
+$nasShare = Read-Default 'NAS share root (z.B. \\nas\Software) - leer = lokal' $prev.NasShare
+
+$nasTarget   = $prev.NasTarget
+$driveLetter = $prev.DriveLetter
 if ($nasShare -ne '') {
-    $nasTarget   = Read-Host 'NAS subfolder fuer Reports (z.B. ISOs\Windows10HpPro)'
-    $driveLetter = Read-Host 'Laufwerksbuchstabe fuer NAS (Standard Z)'
-    if ($driveLetter -eq '') { $driveLetter = 'Z' }
+    $nasTarget   = Read-Default 'NAS subfolder fuer Reports (z.B. ISOs\Windows10HpPro)' $prev.NasTarget
+    $driveLetter = Read-Default 'Laufwerksbuchstabe fuer NAS' $prev.DriveLetter
 }
 
-$localOutput = Read-Host 'Lokaler Ausgabepfad (z.B. C:\Temp oder G:\USB-STICK\TEMP) - leer = NAS nutzen'
-$localTemp   = Read-Host 'Lokaler Temp-Ordner fuer Zwischendateien (Standard C:\Temp)'
-if ($localTemp -eq '') { $localTemp = 'C:\Temp' }
+$localOutput = Read-Default 'Lokaler Ausgabepfad (z.B. C:\Temp oder G:\USB-STICK\TEMP) - leer = NAS' $prev.LocalOutput
+$localTemp   = Read-Default 'Lokaler Temp-Ordner fuer Zwischendateien' $prev.LocalTemp
 
-# Wenn weder NAS noch LocalOutput gesetzt: auf LocalTemp fallbacken
+# Fallback: kein NAS, kein LocalOutput -> LocalTemp
 if ($nasShare -eq '' -and $localOutput -eq '') {
     $localOutput = $localTemp
     Write-Host "[INFO] Kein NAS und kein LocalOutput - verwende LocalTemp: $localOutput" -ForegroundColor Yellow
 }
 
-$githubUser = Read-Host 'GitHub username'
-$repoName   = Read-Host 'GitHub repo name (Standard windows-disk-transition-toolkit)'
-if ($repoName -eq '') { $repoName = 'windows-disk-transition-toolkit' }
-$repoBase   = Read-Host 'Lokale Basis fuer geklonte Repos (Standard C:\Tools)'
-if ($repoBase -eq '') { $repoBase = 'C:\Tools' }
+$githubUser = Read-Default 'GitHub username' $prev.GitHubUser
+$repoName   = Read-Default 'GitHub repo name' $prev.RepoName
+$repoBase   = Read-Default 'Lokale Basis fuer geklonte Repos' $prev.RepoBase
 
 $content = @"
 # config.local.ps1 - automatisch generiert von setup.ps1
-# NICHT einchecken (in .gitignore)
+# NICHT einchecken (.gitignore)
 
 `$Config = [pscustomobject]@{
     NasShare    = '$nasShare'
@@ -62,12 +93,8 @@ $content | Set-Content -Path $configFile -Encoding UTF8
 Write-Host ''
 Write-Host "config.local.ps1 geschrieben: $configFile" -ForegroundColor Green
 
-if ($localTemp -ne '') {
-    New-Item -Path $localTemp -ItemType Directory -Force | Out-Null
-    Write-Host "Lokaler Temp-Ordner: $localTemp" -ForegroundColor Green
-}
-if ($localOutput -ne '' -and $localOutput -ne $localTemp) {
-    New-Item -Path $localOutput -ItemType Directory -Force | Out-Null
-    Write-Host "Lokaler Ausgabe-Ordner: $localOutput" -ForegroundColor Green
+foreach ($path in @($localTemp, $localOutput) | Where-Object { $_ -ne '' } | Select-Object -Unique) {
+    New-Item -Path $path -ItemType Directory -Force | Out-Null
+    Write-Host "Ordner sichergestellt: $path" -ForegroundColor Green
 }
 Write-Host ''
