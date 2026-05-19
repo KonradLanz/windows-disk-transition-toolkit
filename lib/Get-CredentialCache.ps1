@@ -1,10 +1,10 @@
 function Get-CredentialCache {
     param(
-        [string]$CacheKey = "nas",
-        [string]$Message  = "Bitte Zugangsdaten eingeben"
+        [string]$CacheKey = 'nas',
+        [string]$Message  = 'Bitte Zugangsdaten eingeben'
     )
-    $cacheDir  = Join-Path $env:APPDATA "WDT-Bootstrap"
-    $credFile  = Join-Path $cacheDir "$CacheKey.xml"
+    $cacheDir = Join-Path $env:APPDATA 'WDT-Bootstrap'
+    $credFile = Join-Path $cacheDir "$CacheKey.xml"
     New-Item -Path $cacheDir -ItemType Directory -Force | Out-Null
 
     if (Test-Path $credFile) {
@@ -18,17 +18,58 @@ function Get-CredentialCache {
         }
     }
     $cred = Get-Credential -Message $Message
+    if (-not $cred) { return $null }
     $cred | Export-Clixml $credFile
     Write-Host "[$CacheKey] Credentials gecacht." -ForegroundColor Green
     return $cred
 }
 
 function Clear-CredentialCache {
-    param([string]$CacheKey = "nas")
-    $cacheDir = Join-Path $env:APPDATA "WDT-Bootstrap"
+    param([string]$CacheKey = 'nas')
+    $cacheDir = Join-Path $env:APPDATA 'WDT-Bootstrap'
     $credFile = Join-Path $cacheDir "$CacheKey.xml"
     if (Test-Path $credFile) {
         Remove-Item $credFile -Force
         Write-Host "[$CacheKey] Cache geloescht." -ForegroundColor Yellow
     }
+}
+
+# Verbindet ein NAS-Laufwerk mit automatischem Retry bei falschem Kennwort.
+# Gibt $true zurueck wenn erfolgreich, $false wenn User abbricht.
+function Connect-NasWithRetry {
+    param(
+        [string]$Drive,
+        [string]$ShareRoot,
+        [string]$CacheKey = 'nas',
+        [int]$MaxAttempts = 3
+    )
+    $attempt = 0
+    while ($attempt -lt $MaxAttempts) {
+        $attempt++
+        $cred = Get-CredentialCache -CacheKey $CacheKey -Message "NAS-Zugangsdaten fuer $ShareRoot"
+        if (-not $cred) {
+            Write-Host '[NAS] Abgebrochen.' -ForegroundColor Yellow
+            return $false
+        }
+        # Vorhandenes Laufwerk entfernen falls vorhanden
+        if (Get-PSDrive -Name $Drive -ErrorAction SilentlyContinue) {
+            Remove-PSDrive -Name $Drive -Force
+        }
+        try {
+            New-PSDrive -Name $Drive -PSProvider FileSystem -Root $ShareRoot `
+                        -Credential $cred -Persist -ErrorAction Stop | Out-Null
+            Write-Host "[NAS] Laufwerk $Drive`: verbunden." -ForegroundColor Green
+            return $true
+        } catch {
+            $msg = $_.Exception.Message
+            Write-Host "[NAS] Fehler (Versuch $attempt/$MaxAttempts): $msg" -ForegroundColor Red
+            # Cache loeschen damit beim naechsten Versuch neu abgefragt wird
+            Clear-CredentialCache -CacheKey $CacheKey
+            if ($attempt -ge $MaxAttempts) {
+                Write-Host '[NAS] Maximale Versuche erreicht. Vorgang abgebrochen.' -ForegroundColor Red
+                return $false
+            }
+        }
+    }
+    return $false
 }
