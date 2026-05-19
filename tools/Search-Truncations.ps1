@@ -4,10 +4,10 @@
 #
 # VERWENDUNG (Z: bereits gemountet):
 #   .\tools\Search-Truncations.ps1
-#   .\tools\Search-Truncations.ps1 -Dirs @('esata-disk1-analysis_20260519-230954','analysis_20260519-224759')
+#   .\tools\Search-Truncations.ps1 -Dirs @('ordner1','ordner2')
 #
 # VERWENDUNG (Z: noch nicht gemountet):
-#   .\tools\Search-Truncations.ps1 -NasShare '\\nas.ad.own.dedyn.io\Software' -SearchBase 'ISOs\Windows10HpPro'
+#   .\tools\Search-Truncations.ps1 -NasShare '\\nas.ad.own.dedyn.io\Software'
 
 param(
     [string]$NasShare    = '',
@@ -30,12 +30,18 @@ if ($NasShare -ne '') {
     Write-Host "NAS verbinden: $NasShare" -ForegroundColor Yellow
     $cred = Get-Credential -Message "NAS Zugangsdaten fuer $NasShare"
     try { Remove-PSDrive -Name $DriveLetter -Force -ErrorAction SilentlyContinue } catch {}
-    New-PSDrive -Name $DriveLetter -PSProvider FileSystem -Root $NasShare -Credential $cred -Scope Global | Out-Null
-    Write-Host "NAS gemountet als ${DriveLetter}:" -ForegroundColor Green
+    try {
+        New-PSDrive -Name $DriveLetter -PSProvider FileSystem -Root $NasShare -Credential $cred -Scope Global -ErrorAction Stop | Out-Null
+        Write-Host "NAS gemountet als ${DriveLetter}: -> $NasShare" -ForegroundColor Green
+    } catch {
+        Write-Host "[FEHLER] NAS konnte nicht gemountet werden: $_" -ForegroundColor Red
+        Write-Host '         Benutzername/Passwort pruefen und nochmal versuchen.' -ForegroundColor Gray
+        exit 1
+    }
 } else {
     if (-not (Get-PSDrive -Name $DriveLetter -ErrorAction SilentlyContinue)) {
         Write-Host "[FEHLER] Laufwerk ${DriveLetter}: nicht gefunden und kein -NasShare angegeben." -ForegroundColor Red
-        Write-Host '         Beispiel: -NasShare \"\\\\nas.ad.own.dedyn.io\\Software\"' -ForegroundColor Gray
+        Write-Host "         Beispiel: -NasShare '\\\\nas.ad.own.dedyn.io\\Software'" -ForegroundColor Gray
         exit 1
     }
     Write-Host "Verwende ${DriveLetter}: (bereits gemountet)" -ForegroundColor Cyan
@@ -45,6 +51,7 @@ $rootPath = "${DriveLetter}:\$SearchBase"
 
 if (-not (Test-Path $rootPath)) {
     Write-Host "[FEHLER] Pfad nicht gefunden: $rootPath" -ForegroundColor Red
+    Write-Host "         Pruefe ob der NAS-Share korrekt ist und '$SearchBase' existiert." -ForegroundColor Gray
     exit 1
 }
 

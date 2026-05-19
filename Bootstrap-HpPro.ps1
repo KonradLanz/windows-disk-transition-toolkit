@@ -34,22 +34,29 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 Write-Host '      winget OK' -ForegroundColor Green
 
 # 3) git
-Write-Host '[3/5] Pruefe git...' -ForegroundColor Yellow
+Write-Host '[3/5] Pruefe git (Versionskontrolle fuer die Skripte)...' -ForegroundColor Yellow
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host '      git nicht gefunden - installiere...' -ForegroundColor Yellow
+    Write-Host '      git nicht gefunden - wird jetzt automatisch installiert (~62 MB)...' -ForegroundColor Yellow
+    Write-Host '      Bitte warten...' -ForegroundColor Gray
     winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements
     $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
                 [System.Environment]::GetEnvironmentVariable('Path','User')
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         Write-Host ''
-        Write-Host '      git installiert - bitte PowerShell neu starten und Script nochmal ausfuehren.' -ForegroundColor Yellow
+        Write-Host '      git wurde installiert!' -ForegroundColor Green
+        Write-Host ''
+        Write-Host '  >>> NAECHSTER SCHRITT: PowerShell schliessen und neu oeffnen (als Admin)' -ForegroundColor Yellow
+        Write-Host '  >>> Dann dieses Script nochmal starten:' -ForegroundColor Yellow
+        Write-Host "  >>>   & 'Z:\bootstrap\Bootstrap-HpPro.ps1'" -ForegroundColor Cyan
+        Write-Host ''
+        Read-Host 'Enter druecken zum Beenden'
         exit 0
     }
 }
 Write-Host '      git OK' -ForegroundColor Green
 
 # 4) Repos klonen / aktualisieren
-Write-Host '[4/5] Repos klonen / aktualisieren...' -ForegroundColor Yellow
+Write-Host '[4/5] Repos klonen / aktualisieren (Skripte von GitHub holen)...' -ForegroundColor Yellow
 New-Item -Path $repoBase -ItemType Directory -Force | Out-Null
 
 foreach ($repo in @('ExecutionPolicy-Foundation','windows-disk-transition-toolkit')) {
@@ -69,8 +76,13 @@ Write-Host '[5/5] NAS verbinden...' -ForegroundColor Yellow
 if ($NasShare -ne '') {
     $cred = Get-Credential -Message "NAS Zugangsdaten fuer $NasShare"
     try { Remove-PSDrive -Name $DriveLetter -Force -ErrorAction SilentlyContinue } catch {}
-    New-PSDrive -Name $DriveLetter -PSProvider FileSystem -Root $NasShare -Credential $cred -Scope Global | Out-Null
-    Write-Host "      NAS gemountet als ${DriveLetter}: -> $NasShare" -ForegroundColor Green
+    try {
+        New-PSDrive -Name $DriveLetter -PSProvider FileSystem -Root $NasShare -Credential $cred -Scope Global -ErrorAction Stop | Out-Null
+        Write-Host "      NAS gemountet als ${DriveLetter}: -> $NasShare" -ForegroundColor Green
+    } catch {
+        Write-Host "      [FEHLER] NAS konnte nicht gemountet werden: $_" -ForegroundColor Red
+        Write-Host '      Benutzername/Passwort pruefen.' -ForegroundColor Gray
+    }
 } else {
     Write-Host '      Kein NAS angegeben - uebersprungen.' -ForegroundColor Gray
 }
@@ -81,7 +93,7 @@ Write-Host '  Bootstrap abgeschlossen!' -ForegroundColor Green
 Write-Host "  Repos: $repoBase" -ForegroundColor Green
 Write-Host '================================================' -ForegroundColor Green
 Write-Host ''
-Write-Host 'Naechster Schritt - Truncation-Suche:' -ForegroundColor Cyan
+Write-Host 'Naechste Schritte - Truncation-Suche:' -ForegroundColor Cyan
 Write-Host "  cd '$repoBase\windows-disk-transition-toolkit'" -ForegroundColor Cyan
-Write-Host "  .\tools\Search-Truncations.ps1" -ForegroundColor Cyan
+Write-Host "  .\tools\Search-Truncations.ps1 -Dirs @('ordner1','ordner2')" -ForegroundColor Cyan
 Write-Host ''
