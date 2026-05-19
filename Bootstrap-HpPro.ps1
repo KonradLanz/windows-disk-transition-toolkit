@@ -5,10 +5,6 @@
 #   PowerShell als Administrator:
 #   Set-ExecutionPolicy Bypass -Scope Process -Force
 #   iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/KonradLanz/windows-disk-transition-toolkit/main/Bootstrap-HpPro.ps1'))
-#
-# MIT NAS:
-#   $s='https://raw.githubusercontent.com/KonradLanz/windows-disk-transition-toolkit/main/Bootstrap-HpPro.ps1'
-#   & ([scriptblock]::Create((New-Object Net.WebClient).DownloadString($s))) -NasShare '\\nas-hostname-removed\Software'
 
 param(
     [string]$NasShare    = '',
@@ -45,7 +41,7 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
                 [System.Environment]::GetEnvironmentVariable('Path','User')
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Write-Host '' 
+        Write-Host ''
         Write-Host '      git installiert - bitte PowerShell neu starten und Script nochmal ausfuehren.' -ForegroundColor Yellow
         exit 0
     }
@@ -77,7 +73,6 @@ if ($NasShare -ne '') {
     Write-Host "      NAS gemountet als ${DriveLetter}: -> $NasShare" -ForegroundColor Green
 } else {
     Write-Host '      Kein NAS angegeben - uebersprungen.' -ForegroundColor Gray
-    Write-Host "      Tipp: -NasShare '\\\\nas-hostname-removed\\Software'" -ForegroundColor Gray
 }
 
 Write-Host ''

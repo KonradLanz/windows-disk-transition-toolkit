@@ -1,7 +1,6 @@
 # Bootstrap-Notebook.template.ps1
-# TEMPLATE ONLY - copy to NAS as Bootstrap-Notebook.ps1 and fill in paths
+# TEMPLATE ONLY - copy to NAS and fill in your values
 # DO NOT COMMIT the live version
-# NAS location: \\your-nas\Software\bootstrap\Bootstrap-Notebook.ps1
 #
 # PS 5.1 compatible (*.ps1 baseline)
 
@@ -35,16 +34,15 @@ if (Test-Path $configFile) {
 } else {
     $cfg = [pscustomobject]@{
         GitHubToken = Read-Host 'GitHub PAT (wird lokal gecacht)'
-        GitHubUser  = 'KonradLanz'
+        GitHubUser  = Read-Host 'GitHub Username'
         LocalBase   = $repoBase
-        NasShare    = '\\your-nas\Software'   # <-- fill in
+        NasShare    = Read-Host 'NAS Share (z.B. \\\\nas\\Software)'
     }
     $cfg | Export-Clixml $configFile
 }
 
 # --- git ---
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host 'Installiere git...' -ForegroundColor Yellow
     winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements
     $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
                 [System.Environment]::GetEnvironmentVariable('Path','User')
@@ -54,24 +52,17 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 foreach ($repo in @('ExecutionPolicy-Foundation','windows-disk-transition-toolkit')) {
     $dir = Join-Path $cfg.LocalBase $repo
     if (-not (Test-Path $dir)) {
-        Write-Host "Klone $repo..." -ForegroundColor Yellow
         git clone "https://$($cfg.GitHubToken)@github.com/$($cfg.GitHubUser)/${repo}.git" $dir
     } else {
-        Write-Host "Aktualisiere $repo..." -ForegroundColor Cyan
         Push-Location $dir; git pull; Pop-Location
     }
 }
 
-# --- setup.ps1 ---
-$setup = Join-Path $cfg.LocalBase 'windows-disk-transition-toolkit\setup.ps1'
-if (Test-Path $setup) { & $setup }
-
 # --- NAS verbinden ---
-try { Remove-PSDrive -Name 'S' -Force -ErrorAction SilentlyContinue } catch {}
-New-PSDrive -Name 'S' -PSProvider FileSystem -Root $cfg.NasShare -Credential $cred -Scope Global | Out-Null
+try { Remove-PSDrive -Name 'Z' -Force -ErrorAction SilentlyContinue } catch {}
+New-PSDrive -Name 'Z' -PSProvider FileSystem -Root $cfg.NasShare -Credential $cred -Scope Global | Out-Null
 
 Write-Host ''
-Write-Host 'Bootstrap Notebook abgeschlossen.' -ForegroundColor Green
+Write-Host 'Bootstrap abgeschlossen.' -ForegroundColor Green
 Write-Host "  Repos : $($cfg.LocalBase)" -ForegroundColor Yellow
-Write-Host '  NAS   : S:\' -ForegroundColor Yellow
-Write-Host ''
+Write-Host '  NAS   : Z:\' -ForegroundColor Yellow
