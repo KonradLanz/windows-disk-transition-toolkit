@@ -27,37 +27,39 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/KonradLanz/windows-disk-transition-toolkit/main/Bootstrap-HpPro.ps1'))
 ```
 
-Das Script:
-- installiert `git` automatisch (via winget)
-- klont beide Repos nach `C:\Users\<name>\github\`
-- mountet optional das NAS
+Das Script installiert `git` automatisch, klont beide Repos nach `%USERPROFILE%\github\` und zeigt den naechsten Schritt.
 
 ### Mit NAS direkt verbinden
 
 ```powershell
 $s = 'https://raw.githubusercontent.com/KonradLanz/windows-disk-transition-toolkit/main/Bootstrap-HpPro.ps1'
-& ([scriptblock]::Create((New-Object Net.WebClient).DownloadString($s))) -NasShare '\\nas.ad.own.dedyn.io\Software'
+& ([scriptblock]::Create((New-Object Net.WebClient).DownloadString($s))) -NasShare '\\<nas-hostname>\<share>'
 ```
+
+> `<nas-hostname>` und `<share>` durch eigenen NAS-Pfad ersetzen.
 
 ---
 
 ## Truncation-Suche starten
 
-Nach dem Bootstrap (Z: bereits gemountet):
+Nach dem Bootstrap (NAS bereits als Z: gemountet):
 
 ```powershell
 cd "$env:USERPROFILE\github\windows-disk-transition-toolkit"
-.\tools\Search-Truncations.ps1 -Dirs @('esata-disk1-analysis_20260519-230954','analysis_20260519-224759')
+.\tools\Search-Truncations.ps1 -Dirs @('ordner-1','ordner-2')
 ```
 
 Oder mit NAS-Mount in einem Schritt:
 
 ```powershell
+cd "$env:USERPROFILE\github\windows-disk-transition-toolkit"
 .\tools\Search-Truncations.ps1 `
-    -NasShare '\\nas.ad.own.dedyn.io\Software' `
+    -NasShare '\\<nas-hostname>\<share>' `
     -SearchBase 'ISOs\Windows10HpPro' `
-    -Dirs @('esata-disk1-analysis_20260519-230954','analysis_20260519-224759')
+    -Dirs @('ordner-1','ordner-2')
 ```
+
+Der Bericht wird automatisch nach `%TEMP%\truncation-report.csv` gespeichert.
 
 ---
 
@@ -68,10 +70,10 @@ Oder mit NAS-Mount in einem Schritt:
 
 ```powershell
 Set-ExecutionPolicy Bypass -Scope Process -Force
-& 'E:\windows-disk-transition-toolkit\Bootstrap-HpPro.ps1'
+& 'D:\windows-disk-transition-toolkit\Bootstrap-HpPro.ps1'
 ```
 
-> `E:` je nach Stick-Laufwerksbuchstabe anpassen.
+> Laufwerksbuchstaben (`D:`) je nach Stick anpassen.
 
 ---
 
@@ -82,8 +84,8 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 | 1 | PS-Version anzeigen |
 | 2 | winget pruefen |
 | 3 | git installieren falls fehlt |
-| 4 | Repos klonen / aktualisieren |
-| 5 | NAS mounten (optional) |
+| 4 | Repos nach `%USERPROFILE%\github\` klonen / aktualisieren |
+| 5 | NAS mounten (optional, per `-NasShare` Parameter) |
 
 ---
 
@@ -107,7 +109,7 @@ windows-disk-transition-toolkit/
 
 | Suffix | Bedeutung |
 |---|---|
-| `*.ps1` | PS 5.1 kompatibel (Standard) |
+| `*.ps1` | PS 5.1 kompatibel (Standard, laeuft ueberall) |
 | `*.pwsh7.ps1` | Benoetigt pwsh.exe >= 7.x |
 | `*.pwsh74.ps1` | Benoetigt pwsh.exe >= 7.4 LTS |
 
