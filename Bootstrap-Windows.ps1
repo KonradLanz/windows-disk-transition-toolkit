@@ -1,6 +1,7 @@
 # Bootstrap-Windows.ps1
-# Generisches Windows-Bootstrap - laeuft auf jedem Windows-Rechner (PS 5.1+)
-# Kein git noetig zum Starten - wird bei Bedarf automatisch installiert.
+# Thin Wrapper - delegiert an bootstrap-foundation
+# Projektspezifisch: NAS mounten + windows-disk-transition-toolkit klonen
+# PS 5.1 kompatibel
 #
 # STARTEN (PowerShell als Administrator):
 #   Set-ExecutionPolicy Bypass -Scope Process -Force
@@ -21,58 +22,32 @@ $repoBase = Join-Path $env:USERPROFILE 'github'
 
 Write-Host ''
 Write-Host '================================================' -ForegroundColor Cyan
-Write-Host '  Windows Bootstrap - windows-disk-transition'   -ForegroundColor Cyan
+Write-Host '  windows-disk-transition-toolkit Bootstrap'     -ForegroundColor Cyan
 Write-Host '================================================' -ForegroundColor Cyan
 Write-Host ''
 
-# 1) PS Version
-Write-Host "[1/5] PowerShell $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))" -ForegroundColor Green
-
-# 2) winget
-Write-Host '[2/5] Pruefe winget...' -ForegroundColor Yellow
-if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-    Write-Host '      winget nicht gefunden!' -ForegroundColor Red
-    Write-Host '      -> https://aka.ms/getwinget installieren, dann neu starten.' -ForegroundColor Red
+# 1) bootstrap-foundation delegieren (git, winget, ExecutionPolicy-Foundation)
+Write-Host '[1/3] bootstrap-foundation laden...' -ForegroundColor Yellow
+$bfUrl = 'https://raw.githubusercontent.com/KonradLanz/bootstrap-foundation/main/windows/bootstrap.ps1'
+try {
+    & ([scriptblock]::Create((New-Object Net.WebClient).DownloadString($bfUrl))) -GitHubUser $GitHubUser
+} catch {
+    Write-Host "      [FEHLER] bootstrap-foundation nicht erreichbar: $_" -ForegroundColor Red
     exit 1
 }
-Write-Host '      winget OK' -ForegroundColor Green
 
-# 3) git
-Write-Host '[3/5] Pruefe git...' -ForegroundColor Yellow
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host '      git nicht gefunden - wird automatisch installiert (~62 MB)...' -ForegroundColor Yellow
-    winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements
-    $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
-                [System.Environment]::GetEnvironmentVariable('Path','User')
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Write-Host ''
-        Write-Host '      git installiert!' -ForegroundColor Green
-        Write-Host '  >>> PowerShell schliessen, neu oeffnen (als Admin) und Script nochmal starten.' -ForegroundColor Yellow
-        Write-Host '  >>>   iex ((New-Object Net.WebClient).DownloadString(''https://raw.githubusercontent.com/KonradLanz/windows-disk-transition-toolkit/main/Bootstrap-Windows.ps1''))' -ForegroundColor Cyan
-        Read-Host 'Enter druecken zum Beenden'
-        exit 0
-    }
+# 2) Dieses Repo klonen / aktualisieren
+Write-Host '[2/3] windows-disk-transition-toolkit klonen...' -ForegroundColor Yellow
+$dir = Join-Path $repoBase 'windows-disk-transition-toolkit'
+if (-not (Test-Path $dir)) {
+    git clone "https://github.com/$GitHubUser/windows-disk-transition-toolkit.git" $dir
+} else {
+    Push-Location $dir; git pull; Pop-Location
 }
-Write-Host '      git OK' -ForegroundColor Green
+Write-Host '      OK' -ForegroundColor Green
 
-# 4) Repos klonen / aktualisieren
-Write-Host '[4/5] Repos klonen / aktualisieren...' -ForegroundColor Yellow
-New-Item -Path $repoBase -ItemType Directory -Force | Out-Null
-
-foreach ($repo in @('ExecutionPolicy-Foundation', 'windows-disk-transition-toolkit')) {
-    $dir = Join-Path $repoBase $repo
-    if (-not (Test-Path $dir)) {
-        Write-Host "      Klone $repo..." -ForegroundColor Yellow
-        git clone "https://github.com/${GitHubUser}/${repo}.git" $dir
-    } else {
-        Write-Host "      Aktualisiere $repo..." -ForegroundColor Cyan
-        Push-Location $dir; git pull; Pop-Location
-    }
-}
-Write-Host '      Repos OK' -ForegroundColor Green
-
-# 5) NAS (optional)
-Write-Host '[5/5] NAS verbinden...' -ForegroundColor Yellow
+# 3) NAS (projektspezifisch, optional)
+Write-Host '[3/3] NAS verbinden...' -ForegroundColor Yellow
 if ($NasShare -ne '') {
     $cred = Get-Credential -Message "NAS Zugangsdaten fuer $NasShare"
     try { Remove-PSDrive -Name $DriveLetter -Force -ErrorAction SilentlyContinue } catch {}
