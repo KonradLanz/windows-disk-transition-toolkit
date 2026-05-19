@@ -1,0 +1,16 @@
+# Local credential cache
+nas.xml
+config.xml
+*.credential.xml
+config.local.ps1
+
+# Temp output
+C:\Temp\
+output\
+*.csv
+*.log
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
