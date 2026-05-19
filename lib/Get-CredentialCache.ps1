@@ -35,13 +35,15 @@ function Clear-CredentialCache {
 }
 
 # Verbindet ein NAS-Laufwerk mit automatischem Retry bei falschem Kennwort.
+# Verwendet 'net use' statt New-PSDrive damit das Laufwerk Windows-weit sichtbar
+# ist und Join-Path / dir z: sofort funktionieren.
 # Gibt $true zurueck wenn erfolgreich, $false wenn User abbricht.
 function Connect-NasWithRetry {
     param(
         [string]$Drive,
         [string]$ShareRoot,
-        [string]$CacheKey = 'nas',
-        [int]$MaxAttempts = 3
+        [string]$CacheKey   = 'nas',
+        [int]$MaxAttempts   = 3
     )
     $attempt = 0
     while ($attempt -lt $MaxAttempts) {
@@ -51,19 +53,27 @@ function Connect-NasWithRetry {
             Write-Host '[NAS] Abgebrochen.' -ForegroundColor Yellow
             return $false
         }
-        # Vorhandenes Laufwerk entfernen falls vorhanden
+
+        # Vorhandene Verbindung trennen (net use und PSDrive)
+        net use "${Drive}:" /delete /yes 2>$null | Out-Null
         if (Get-PSDrive -Name $Drive -ErrorAction SilentlyContinue) {
-            Remove-PSDrive -Name $Drive -Force
+            Remove-PSDrive -Name $Drive -Force -ErrorAction SilentlyContinue
         }
+
+        $user     = $cred.UserName
+        $password = $cred.GetNetworkCredential().Password
+
         try {
-            New-PSDrive -Name $Drive -PSProvider FileSystem -Root $ShareRoot `
-                        -Credential $cred -Persist -ErrorAction Stop | Out-Null
+            # net use erzeugt ein echtes Windows-Netzlaufwerk - kein Scope-Problem
+            $result = net use "${Drive}:" $ShareRoot $password /user:$user /persistent:no 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw $result
+            }
             Write-Host "[NAS] Laufwerk $Drive`: verbunden." -ForegroundColor Green
             return $true
         } catch {
-            $msg = $_.Exception.Message
+            $msg = ($_ | Out-String).Trim()
             Write-Host "[NAS] Fehler (Versuch $attempt/$MaxAttempts): $msg" -ForegroundColor Red
-            # Cache loeschen damit beim naechsten Versuch neu abgefragt wird
             Clear-CredentialCache -CacheKey $CacheKey
             if ($attempt -ge $MaxAttempts) {
                 Write-Host '[NAS] Maximale Versuche erreicht. Vorgang abgebrochen.' -ForegroundColor Red
@@ -72,4 +82,13 @@ function Connect-NasWithRetry {
         }
     }
     return $false
+}
+
+# Trennt ein per Connect-NasWithRetry verbundenes Laufwerk.
+function Disconnect-Nas {
+    param([string]$Drive)
+    net use "${Drive}:" /delete /yes 2>$null | Out-Null
+    if (Get-PSDrive -Name $Drive -ErrorAction SilentlyContinue) {
+        Remove-PSDrive -Name $Drive -Force -ErrorAction SilentlyContinue
+    }
 }
