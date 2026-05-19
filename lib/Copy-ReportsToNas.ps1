@@ -28,5 +28,5 @@ function Copy-ReportsToNas {
     Write-Host $runDir -ForegroundColor Yellow
     Write-Host ''
 
-    try { Remove-PSDrive -Name $drive -Force -ErrorAction SilentlyContinue } catch {}
+    Disconnect-Nas -Drive $drive
 }

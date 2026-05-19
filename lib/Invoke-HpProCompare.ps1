@@ -77,6 +77,6 @@ function Invoke-HpProCompare {
     Write-Host ''
 
     if (-not ($localOut -and $localOut -ne '')) {
-        try { Remove-PSDrive -Name $drive -Force -ErrorAction SilentlyContinue } catch {}
+        Disconnect-Nas -Drive $drive
     }
 }
