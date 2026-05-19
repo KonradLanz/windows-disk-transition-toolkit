@@ -6,7 +6,7 @@ function Invoke-HpProCompare {
     $targetRel = $Config.NasTarget
     $drive     = $Config.DriveLetter
     $localTemp = $Config.LocalTemp
-    $localOut  = $Config.LocalOutput   # z.B. C:\Temp oder G:\USB-STICK\TEMP
+    $localOut  = $Config.LocalOutput
 
     # Build live compare report
     $disks  = Get-Disk
@@ -35,10 +35,14 @@ function Invoke-HpProCompare {
     }
 
     $report | Sort-Object DiskNumber, Offset | Format-Table -AutoSize
-    $report | Sort-Object DiskNumber, Offset |
-        Export-Csv (Join-Path $localTemp 'disk-compare.csv') -NoTypeInformation -Encoding UTF8
 
-    # Check for signature conflict (clone indicator)
+    # CSV lokal zwischenspeichern
+    if ($localTemp) {
+        $report | Sort-Object DiskNumber, Offset |
+            Export-Csv (Join-Path $localTemp 'disk-compare.csv') -NoTypeInformation -Encoding UTF8
+    }
+
+    # Signaturkonflikt pruefen (Klon-Indikator)
     $sigs = $report | Select-Object -ExpandProperty Signature -Unique | Where-Object { $_ }
     if (($sigs | Measure-Object).Count -lt ($disks | Measure-Object).Count) {
         Write-Host '[WARNUNG] Moeglicher Signaturkonflikt - gleiche MBR-Signatur auf mehreren Disks!' -ForegroundColor Red
@@ -50,10 +54,8 @@ function Invoke-HpProCompare {
         New-Item -Path $runDir -ItemType Directory -Force | Out-Null
         Write-Host "[INFO] Ausgabe lokal: $runDir" -ForegroundColor Cyan
     } else {
-        $cred = Get-CredentialCache -CacheKey 'nas' -Message 'NAS-Zugangsdaten fuer HP Pro Compare'
-        try { Remove-PSDrive -Name $drive -Force -ErrorAction SilentlyContinue } catch {}
-        New-PSDrive -Name $drive -PSProvider FileSystem -Root $shareRoot `
-            -Credential $cred -Scope Global -ErrorAction Stop | Out-Null
+        $ok = Connect-NasWithRetry -Drive $drive -ShareRoot $shareRoot -CacheKey 'nas'
+        if (-not $ok) { return }
         $runDir = Join-Path "${drive}:\$targetRel" ("hp-pro-analysis_$stamp")
         New-Item -Path $runDir -ItemType Directory -Force | Out-Null
         Write-Host "[INFO] Ausgabe NAS: $runDir" -ForegroundColor Cyan
@@ -66,7 +68,7 @@ function Invoke-HpProCompare {
 
     foreach ($f in @('disk1.txt', 'disk1-partitions.txt', 'disk1-volumes.txt')) {
         $src = Join-Path $localTemp $f
-        if (Test-Path $src) { Copy-Item $src -Destination $runDir -Force }
+        if ($src -and (Test-Path $src)) { Copy-Item $src -Destination $runDir -Force }
     }
 
     Write-Host ''

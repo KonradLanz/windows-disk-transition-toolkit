@@ -8,7 +8,7 @@ function Invoke-NotebookEsataExport {
     $shareRoot = $Config.NasShare
     $targetRel = $Config.NasTarget
     $drive     = $Config.DriveLetter
-    $localOut  = $Config.LocalOutput   # z.B. C:\Temp oder G:\USB-STICK\TEMP
+    $localOut  = $Config.LocalOutput
 
     # Ausgabeverzeichnis: lokaler Pfad hat Vorrang wenn angegeben, sonst NAS
     if ($localOut -and $localOut -ne '') {
@@ -16,10 +16,8 @@ function Invoke-NotebookEsataExport {
         New-Item -Path $runDir -ItemType Directory -Force | Out-Null
         Write-Host "[INFO] Ausgabe lokal: $runDir" -ForegroundColor Cyan
     } else {
-        $cred = Get-CredentialCache -CacheKey 'nas' -Message 'NAS-Zugangsdaten fuer eSATA-Export'
-        try { Remove-PSDrive -Name $drive -Force -ErrorAction SilentlyContinue } catch {}
-        New-PSDrive -Name $drive -PSProvider FileSystem -Root $shareRoot `
-            -Credential $cred -Scope Global -ErrorAction Stop | Out-Null
+        $ok = Connect-NasWithRetry -Drive $drive -ShareRoot $shareRoot -CacheKey 'nas'
+        if (-not $ok) { return }
         $runDir = Join-Path "${drive}:\$targetRel" ("esata-disk${DiskNumber}-analysis_$stamp")
         New-Item -Path $runDir -ItemType Directory -Force | Out-Null
         Write-Host "[INFO] Ausgabe NAS: $runDir" -ForegroundColor Cyan
