@@ -17,10 +17,18 @@ function Copy-ReportsToNas {
     $runDir = Join-Path "${drive}:\$targetRel" $folderName
     New-Item -Path $runDir -ItemType Directory -Force | Out-Null
 
-    $files = Get-ChildItem -Path $localTemp -File -ErrorAction SilentlyContinue
-    foreach ($f in $files) {
-        Copy-Item -LiteralPath $f.FullName -Destination $runDir -Force
-        Write-Host "Kopiert: $($f.Name)" -ForegroundColor Gray
+    # Rekursiv kopieren - Unterordner werden als Unterordner im Ziel angelegt
+    $items = Get-ChildItem -Path $localTemp -Recurse -ErrorAction SilentlyContinue
+    foreach ($item in $items) {
+        # Relativer Pfad innerhalb von $localTemp
+        $rel = $item.FullName.Substring($localTemp.Length).TrimStart('\', '/')
+        $dest = Join-Path $runDir $rel
+        if ($item.PSIsContainer) {
+            New-Item -Path $dest -ItemType Directory -Force | Out-Null
+        } else {
+            Copy-Item -LiteralPath $item.FullName -Destination $dest -Force
+            Write-Host "Kopiert: $rel" -ForegroundColor Gray
+        }
     }
 
     Write-Host ''
