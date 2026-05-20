@@ -22,7 +22,6 @@ if (-not $Config) {
 # Load lib
 Get-ChildItem (Join-Path $root 'lib') -Filter '*.ps1' | ForEach-Object { . $_.FullName }
 
-# Menu
 function Show-Menu {
     Write-Host ''
     Write-Host '=== Windows Disk Transition Toolkit ===' -ForegroundColor Cyan
@@ -34,7 +33,8 @@ function Show-Menu {
     Write-Host ''
 }
 
-do {
+$running = $true
+while ($running) {
     Show-Menu
     $choice = Read-Host 'Choice'
     switch ($choice.ToUpper()) {
@@ -42,7 +42,9 @@ do {
         '2' { Invoke-HpProCompare        -Config $Config }
         '3' { Copy-ReportsToNas          -Config $Config }
         '4' { Get-DiskPartitionMap }
-        'Q' { break }
+        'Q' { $running = $false }
         default { Write-Host 'Unbekannte Auswahl' -ForegroundColor Red }
     }
-} while ($choice.ToUpper() -ne 'Q')
+}
+
+Write-Host 'Tschuess.' -ForegroundColor Gray
