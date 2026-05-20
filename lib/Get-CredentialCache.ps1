@@ -34,23 +34,21 @@ function Clear-CredentialCache {
     }
 }
 
-# Fuehrt net use aus ohne NativeCommandError bei Fehler zu werfen.
+# Fuehrt net.exe aus ohne NativeCommandError zu werfen (EAP=Stop-safe).
 function Invoke-NetUse {
-    param([string[]]$Args)
-    # Lokales EAP=Continue verhindert dass stderr-Output von net.exe als
-    # terminating error behandelt wird (Start.ps1 setzt EAP=Stop global).
+    param([string[]]$NetArgs)
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $result = & net $Args 2>&1
+    $output = & net.exe @NetArgs 2>&1
     $ec = $LASTEXITCODE
     $ErrorActionPreference = $prev
-    return [pscustomobject]@{ ExitCode = $ec; Output = $result }
+    return [pscustomobject]@{ ExitCode = $ec; Output = $output }
 }
 
 # Trennt ein Netzlaufwerk still - kein Fehler wenn nicht verbunden.
 function Disconnect-Nas {
     param([string]$Drive)
-    Invoke-NetUse 'use', "${Drive}:", '/delete', '/yes' | Out-Null
+    Invoke-NetUse @('use', "${Drive}:", '/delete', '/yes') | Out-Null
     if (Get-PSDrive -Name $Drive -ErrorAction SilentlyContinue) {
         Remove-PSDrive -Name $Drive -Force -ErrorAction SilentlyContinue
     }
@@ -79,7 +77,7 @@ function Connect-NasWithRetry {
         $user     = $cred.UserName
         $password = $cred.GetNetworkCredential().Password
 
-        $r = Invoke-NetUse 'use', "${Drive}:", $ShareRoot, $password, "/user:$user", '/persistent:no'
+        $r = Invoke-NetUse @('use', "${Drive}:", $ShareRoot, $password, "/user:$user", '/persistent:no')
         if ($r.ExitCode -eq 0) {
             Write-Host "[NAS] Laufwerk $Drive`: verbunden." -ForegroundColor Green
             return $true
