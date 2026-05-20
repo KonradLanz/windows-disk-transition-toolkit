@@ -70,22 +70,28 @@ function Invoke-NotebookEsataExport {
         $letter = $p.DriveLetter
         $dst = Join-Path $runDir ('listing-' + $letter)
         New-Item -Path $dst -ItemType Directory -Force | Out-Null
+
         try {
             Get-ChildItem -LiteralPath "${letter}:\" -Force -ErrorAction SilentlyContinue |
                 Select-Object Name, FullName, Length, LastWriteTime, Attributes |
                 Format-List | Out-File (Join-Path $dst 'root-listing.txt')
-        } catch { $_ | Out-String | Out-File (Join-Path $dst 'root-listing-error.txt') }
+        } catch {
+            $_ | Out-String | Out-File (Join-Path $dst 'root-listing-error.txt')
+        }
 
         foreach ($special in @('Recovery', 'Recovery\WindowsRE', 'Boot', 'EFI', 'System Volume Information')) {
             $path = Join-Path "${letter}:\" $special
-            $safe = $special -replace '[\/:*?"<>| ]', '_'
+            # Dateiname flach in $dst - kein Unterordner, vermeidet DirectoryNotFoundException
+            $safe = $special -replace '[\\/:*?"<>| ]', '_'
             try {
                 if (Test-Path -LiteralPath $path) {
                     Get-ChildItem -LiteralPath $path -Force -ErrorAction SilentlyContinue |
                         Select-Object Name, FullName, Length, LastWriteTime, Attributes |
                         Format-List | Out-File (Join-Path $dst "$safe.txt")
                 }
-            } catch { $_ | Out-String | Out-File (Join-Path $dst "$safe-error.txt") }
+            } catch {
+                $_ | Out-String | Out-File (Join-Path $dst "$safe-error.txt")
+            }
         }
     }
 
