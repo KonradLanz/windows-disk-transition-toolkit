@@ -1,6 +1,7 @@
 function Copy-ReportsToNas {
     param(
         [pscustomobject]$Config,
+        [string]$SessionDir = '',
         [string]$SubFolder = ''
     )
 
@@ -8,7 +9,9 @@ function Copy-ReportsToNas {
     $shareRoot = $Config.NasShare
     $targetRel = $Config.NasTarget
     $drive     = $Config.DriveLetter
-    $localTemp = $Config.LocalTemp
+
+    # Quelle: Session-Dir bevorzugt, Fallback auf LocalTemp
+    $sourceDir = if ($SessionDir -and (Test-Path $SessionDir)) { $SessionDir } else { $Config.LocalTemp }
 
     $ok = Connect-NasWithRetry -Drive $drive -ShareRoot $shareRoot -CacheKey 'nas'
     if (-not $ok) { return }
@@ -17,11 +20,9 @@ function Copy-ReportsToNas {
     $runDir = Join-Path "${drive}:\$targetRel" $folderName
     New-Item -Path $runDir -ItemType Directory -Force | Out-Null
 
-    # Rekursiv kopieren - Unterordner werden als Unterordner im Ziel angelegt
-    $items = Get-ChildItem -Path $localTemp -Recurse -ErrorAction SilentlyContinue
+    $items = Get-ChildItem -Path $sourceDir -Recurse -ErrorAction SilentlyContinue
     foreach ($item in $items) {
-        # Relativer Pfad innerhalb von $localTemp
-        $rel = $item.FullName.Substring($localTemp.Length).TrimStart('\', '/')
+        $rel  = $item.FullName.Substring($sourceDir.Length).TrimStart('\', '/')
         $dest = Join-Path $runDir $rel
         if ($item.PSIsContainer) {
             New-Item -Path $dest -ItemType Directory -Force | Out-Null

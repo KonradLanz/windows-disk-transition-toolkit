@@ -1,11 +1,13 @@
 function Invoke-HpProCompare {
-    param([pscustomobject]$Config)
+    param(
+        [pscustomobject]$Config,
+        [string]$SessionDir = ''
+    )
 
     $stamp     = Get-Date -Format 'yyyyMMdd-HHmmss'
     $shareRoot = $Config.NasShare
     $targetRel = $Config.NasTarget
     $drive     = $Config.DriveLetter
-    $localTemp = $Config.LocalTemp
     $localOut  = $Config.LocalOutput
 
     # Build live compare report
@@ -36,10 +38,10 @@ function Invoke-HpProCompare {
 
     $report | Sort-Object DiskNumber, Offset | Format-Table -AutoSize
 
-    # CSV lokal zwischenspeichern
-    if ($localTemp) {
+    # CSV in Session-Dir ablegen
+    if ($SessionDir -and (Test-Path $SessionDir)) {
         $report | Sort-Object DiskNumber, Offset |
-            Export-Csv (Join-Path $localTemp 'disk-compare.csv') -NoTypeInformation -Encoding UTF8
+            Export-Csv (Join-Path $SessionDir "disk-compare_$stamp.csv") -NoTypeInformation -Encoding UTF8
     }
 
     # Signaturkonflikt pruefen (Klon-Indikator)
@@ -65,11 +67,6 @@ function Invoke-HpProCompare {
         Export-Csv (Join-Path $runDir 'disk-compare.csv') -NoTypeInformation -Encoding UTF8
     $report | Sort-Object DiskNumber, Offset | Format-Table -AutoSize | Out-String -Width 4096 |
         Out-File (Join-Path $runDir 'disk-compare.txt')
-
-    foreach ($f in @('disk1.txt', 'disk1-partitions.txt', 'disk1-volumes.txt')) {
-        $src = Join-Path $localTemp $f
-        if ($src -and (Test-Path $src)) { Copy-Item $src -Destination $runDir -Force }
-    }
 
     Write-Host ''
     Write-Host 'HP Pro Compare abgeschlossen nach:' -ForegroundColor Green

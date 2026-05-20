@@ -22,6 +22,12 @@ if (-not $Config) {
 # Load lib
 Get-ChildItem (Join-Path $root 'lib') -Filter '*.ps1' | ForEach-Object { . $_.FullName }
 
+# Session-Verzeichnis in LocalTemp anlegen
+$sessionStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$sessionDir   = Join-Path $Config.LocalTemp "session_$sessionStamp"
+New-Item -Path $sessionDir -ItemType Directory -Force | Out-Null
+Write-Host "[SESSION] $sessionDir" -ForegroundColor DarkGray
+
 function Show-Menu {
     Write-Host ''
     Write-Host '=== Windows Disk Transition Toolkit ===' -ForegroundColor Cyan
@@ -38,9 +44,9 @@ while ($running) {
     Show-Menu
     $choice = Read-Host 'Choice'
     switch ($choice.ToUpper()) {
-        '1' { Invoke-NotebookEsataExport -Config $Config }
-        '2' { Invoke-HpProCompare        -Config $Config }
-        '3' { Copy-ReportsToNas          -Config $Config }
+        '1' { Invoke-NotebookEsataExport -Config $Config -SessionDir $sessionDir }
+        '2' { Invoke-HpProCompare        -Config $Config -SessionDir $sessionDir }
+        '3' { Copy-ReportsToNas          -Config $Config -SessionDir $sessionDir }
         '4' { Get-DiskPartitionMap }
         'Q' { $running = $false }
         default { Write-Host 'Unbekannte Auswahl' -ForegroundColor Red }

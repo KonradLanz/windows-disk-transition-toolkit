@@ -1,7 +1,8 @@
 function Invoke-NotebookEsataExport {
     param(
         [pscustomobject]$Config,
-        [int]$DiskNumber = 1
+        [int]$DiskNumber = 1,
+        [string]$SessionDir = ''
     )
 
     $stamp     = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -57,6 +58,11 @@ function Invoke-NotebookEsataExport {
     $map | Format-Table -AutoSize | Out-String -Width 4096 |
         Out-File (Join-Path $runDir 'partition-volume-map.txt')
     $map | Export-Csv (Join-Path $runDir 'partition-volume-map.csv') -NoTypeInformation -Encoding UTF8
+
+    # CSV auch in Session-Dir ablegen
+    if ($SessionDir -and (Test-Path $SessionDir)) {
+        $map | Export-Csv (Join-Path $SessionDir "esata-disk${DiskNumber}-partitions_$stamp.csv") -NoTypeInformation -Encoding UTF8
+    }
 
     $parts | Select-Object PartitionNumber, DiskPath, Offset, Size | Format-List |
         Out-File (Join-Path $runDir 'partition-paths.txt')
