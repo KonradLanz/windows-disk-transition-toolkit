@@ -34,6 +34,16 @@ function Clear-CredentialCache {
     }
 }
 
+# Trennt ein Netzlaufwerk still - kein Fehler wenn nicht verbunden.
+function Disconnect-Nas {
+    param([string]$Drive)
+    # cmd /c schluckt NativeCommandError wenn das Laufwerk nicht existiert
+    cmd /c "net use ${Drive}: /delete /yes" 2>$null | Out-Null
+    if (Get-PSDrive -Name $Drive -ErrorAction SilentlyContinue) {
+        Remove-PSDrive -Name $Drive -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # Verbindet ein NAS-Laufwerk mit automatischem Retry bei falschem Kennwort.
 # Verwendet 'net use' statt New-PSDrive damit das Laufwerk Windows-weit sichtbar
 # ist und Join-Path / dir z: sofort funktionieren.
@@ -42,8 +52,8 @@ function Connect-NasWithRetry {
     param(
         [string]$Drive,
         [string]$ShareRoot,
-        [string]$CacheKey   = 'nas',
-        [int]$MaxAttempts   = 3
+        [string]$CacheKey  = 'nas',
+        [int]$MaxAttempts  = 3
     )
     $attempt = 0
     while ($attempt -lt $MaxAttempts) {
@@ -54,41 +64,26 @@ function Connect-NasWithRetry {
             return $false
         }
 
-        # Vorhandene Verbindung trennen (net use und PSDrive)
-        net use "${Drive}:" /delete /yes 2>$null | Out-Null
-        if (Get-PSDrive -Name $Drive -ErrorAction SilentlyContinue) {
-            Remove-PSDrive -Name $Drive -Force -ErrorAction SilentlyContinue
-        }
+        # Vorhandene Verbindung still trennen
+        Disconnect-Nas -Drive $Drive
 
         $user     = $cred.UserName
         $password = $cred.GetNetworkCredential().Password
 
-        try {
-            # net use erzeugt ein echtes Windows-Netzlaufwerk - kein Scope-Problem
-            $result = net use "${Drive}:" $ShareRoot $password /user:$user /persistent:no 2>&1
-            if ($LASTEXITCODE -ne 0) {
-                throw $result
-            }
+        # cmd /c verhindert PS NativeCommandError bei Fehler
+        $result = cmd /c "net use ${Drive}: `"$ShareRoot`" `"$password`" /user:`"$user`" /persistent:no" 2>&1
+        if ($LASTEXITCODE -eq 0) {
             Write-Host "[NAS] Laufwerk $Drive`: verbunden." -ForegroundColor Green
             return $true
-        } catch {
-            $msg = ($_ | Out-String).Trim()
-            Write-Host "[NAS] Fehler (Versuch $attempt/$MaxAttempts): $msg" -ForegroundColor Red
-            Clear-CredentialCache -CacheKey $CacheKey
-            if ($attempt -ge $MaxAttempts) {
-                Write-Host '[NAS] Maximale Versuche erreicht. Vorgang abgebrochen.' -ForegroundColor Red
-                return $false
-            }
+        }
+
+        $msg = ($result | Out-String).Trim()
+        Write-Host "[NAS] Fehler (Versuch $attempt/$MaxAttempts): $msg" -ForegroundColor Red
+        Clear-CredentialCache -CacheKey $CacheKey
+        if ($attempt -ge $MaxAttempts) {
+            Write-Host '[NAS] Maximale Versuche erreicht. Vorgang abgebrochen.' -ForegroundColor Red
+            return $false
         }
     }
     return $false
-}
-
-# Trennt ein per Connect-NasWithRetry verbundenes Laufwerk.
-function Disconnect-Nas {
-    param([string]$Drive)
-    net use "${Drive}:" /delete /yes 2>$null | Out-Null
-    if (Get-PSDrive -Name $Drive -ErrorAction SilentlyContinue) {
-        Remove-PSDrive -Name $Drive -Force -ErrorAction SilentlyContinue
-    }
 }
