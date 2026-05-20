@@ -63,7 +63,7 @@ function Invoke-HpProCompare {
 
     $report | Sort-Object DiskNumber, Offset |
         Export-Csv (Join-Path $runDir 'disk-compare.csv') -NoTypeInformation -Encoding UTF8
-    $report | Sort-Object DiskNumber, Offset | Format-Table -AutoSize | Out-String |
+    $report | Sort-Object DiskNumber, Offset | Format-Table -AutoSize | Out-String -Width 4096 |
         Out-File (Join-Path $runDir 'disk-compare.txt')
 
     foreach ($f in @('disk1.txt', 'disk1-partitions.txt', 'disk1-volumes.txt')) {

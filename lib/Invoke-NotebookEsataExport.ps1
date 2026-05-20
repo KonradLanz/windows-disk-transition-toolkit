@@ -28,11 +28,11 @@ function Invoke-NotebookEsataExport {
 
     $disk | Format-List * | Out-File (Join-Path $runDir 'disk.txt')
 
-    $parts | Format-Table * -AutoSize | Out-String |
+    $parts | Format-Table * -AutoSize | Out-String -Width 4096 |
         Out-File (Join-Path $runDir 'partitions-full.txt')
 
     $parts | Select-Object PartitionNumber, DriveLetter, Offset, Size, Type, MbrType, GptType |
-        Format-Table -AutoSize | Out-String |
+        Format-Table -AutoSize | Out-String -Width 4096 |
         Out-File (Join-Path $runDir 'partitions-summary.txt')
 
     $map = $parts | ForEach-Object {
@@ -54,7 +54,8 @@ function Invoke-NotebookEsataExport {
         }
     }
 
-    $map | Format-Table -AutoSize | Out-String | Out-File (Join-Path $runDir 'partition-volume-map.txt')
+    $map | Format-Table -AutoSize | Out-String -Width 4096 |
+        Out-File (Join-Path $runDir 'partition-volume-map.txt')
     $map | Export-Csv (Join-Path $runDir 'partition-volume-map.csv') -NoTypeInformation -Encoding UTF8
 
     $parts | Select-Object PartitionNumber, DiskPath, Offset, Size | Format-List |
@@ -76,12 +77,11 @@ function Invoke-NotebookEsataExport {
                 Select-Object Name, FullName, Length, LastWriteTime, Attributes |
                 Format-List | Out-File (Join-Path $dst 'root-listing.txt')
         } catch {
-            $_ | Out-String | Out-File (Join-Path $dst 'root-listing-error.txt')
+            $_ | Out-String -Width 4096 | Out-File (Join-Path $dst 'root-listing-error.txt')
         }
 
         foreach ($special in @('Recovery', 'Recovery\WindowsRE', 'Boot', 'EFI', 'System Volume Information')) {
             $path = Join-Path "${letter}:\" $special
-            # Dateiname flach in $dst - kein Unterordner, vermeidet DirectoryNotFoundException
             $safe = $special -replace '[\\/:*?"<>| ]', '_'
             try {
                 if (Test-Path -LiteralPath $path) {
@@ -90,7 +90,7 @@ function Invoke-NotebookEsataExport {
                         Format-List | Out-File (Join-Path $dst "$safe.txt")
                 }
             } catch {
-                $_ | Out-String | Out-File (Join-Path $dst "$safe-error.txt")
+                $_ | Out-String -Width 4096 | Out-File (Join-Path $dst "$safe-error.txt")
             }
         }
     }
