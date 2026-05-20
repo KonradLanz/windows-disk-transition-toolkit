@@ -20,15 +20,27 @@ function Copy-ReportsToNas {
     $runDir = Join-Path "${drive}:\$targetRel" $folderName
     New-Item -Path $runDir -ItemType Directory -Force | Out-Null
 
-    $items = Get-ChildItem -Path $sourceDir -Recurse -ErrorAction SilentlyContinue
-    foreach ($item in $items) {
-        $rel  = $item.FullName.Substring($sourceDir.Length).TrimStart('\', '/')
-        $dest = Join-Path $runDir $rel
-        if ($item.PSIsContainer) {
-            New-Item -Path $dest -ItemType Directory -Force | Out-Null
-        } else {
-            Copy-Item -LiteralPath $item.FullName -Destination $dest -Force
-            Write-Host "Kopiert: $rel" -ForegroundColor Gray
+    # robocopy statt Copy-Item: automatischer Retry bei Netzwerkauslastung
+    # ExitCode 0-7 = Erfolg (Bit-Flags), >= 8 = Fehler
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $rcOutput = robocopy $sourceDir $runDir /E /R:3 /W:5 /NP 2>&1
+    $rc = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+
+    if ($rc -ge 8) {
+        Write-Host "" 
+        Write-Host "[FEHLER] robocopy ExitCode $rc - Transfer moeglicherweise unvollstaendig" -ForegroundColor Red
+        $rcOutput | Where-Object { $_ -match 'ERROR|FEHLER' } | ForEach-Object {
+            Write-Host "  $_" -ForegroundColor Red
+        }
+    } else {
+        # Kopierte Dateien aus robocopy-Output extrahieren und anzeigen
+        $rcOutput | Where-Object { $_ -match '^\s+\S' -and $_ -notmatch '^\s*-' } | ForEach-Object {
+            $name = ($_ -split '\s+', 2)[-1].Trim()
+            if ($name -and -not ($name -match '^-{3,}') ) {
+                Write-Host "Kopiert: $name" -ForegroundColor Gray
+            }
         }
     }
 
