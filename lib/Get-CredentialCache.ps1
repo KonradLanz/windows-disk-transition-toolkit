@@ -34,19 +34,29 @@ function Clear-CredentialCache {
     }
 }
 
+# Fuehrt net use aus ohne NativeCommandError bei Fehler zu werfen.
+function Invoke-NetUse {
+    param([string[]]$Args)
+    # Lokales EAP=Continue verhindert dass stderr-Output von net.exe als
+    # terminating error behandelt wird (Start.ps1 setzt EAP=Stop global).
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $result = & net $Args 2>&1
+    $ec = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    return [pscustomobject]@{ ExitCode = $ec; Output = $result }
+}
+
 # Trennt ein Netzlaufwerk still - kein Fehler wenn nicht verbunden.
 function Disconnect-Nas {
     param([string]$Drive)
-    # cmd /c schluckt NativeCommandError wenn das Laufwerk nicht existiert
-    cmd /c "net use ${Drive}: /delete /yes" 2>$null | Out-Null
+    Invoke-NetUse 'use', "${Drive}:", '/delete', '/yes' | Out-Null
     if (Get-PSDrive -Name $Drive -ErrorAction SilentlyContinue) {
         Remove-PSDrive -Name $Drive -Force -ErrorAction SilentlyContinue
     }
 }
 
 # Verbindet ein NAS-Laufwerk mit automatischem Retry bei falschem Kennwort.
-# Verwendet 'net use' statt New-PSDrive damit das Laufwerk Windows-weit sichtbar
-# ist und Join-Path / dir z: sofort funktionieren.
 # Gibt $true zurueck wenn erfolgreich, $false wenn User abbricht.
 function Connect-NasWithRetry {
     param(
@@ -64,20 +74,18 @@ function Connect-NasWithRetry {
             return $false
         }
 
-        # Vorhandene Verbindung still trennen
         Disconnect-Nas -Drive $Drive
 
         $user     = $cred.UserName
         $password = $cred.GetNetworkCredential().Password
 
-        # cmd /c verhindert PS NativeCommandError bei Fehler
-        $result = cmd /c "net use ${Drive}: `"$ShareRoot`" `"$password`" /user:`"$user`" /persistent:no" 2>&1
-        if ($LASTEXITCODE -eq 0) {
+        $r = Invoke-NetUse 'use', "${Drive}:", $ShareRoot, $password, "/user:$user", '/persistent:no'
+        if ($r.ExitCode -eq 0) {
             Write-Host "[NAS] Laufwerk $Drive`: verbunden." -ForegroundColor Green
             return $true
         }
 
-        $msg = ($result | Out-String).Trim()
+        $msg = ($r.Output | Out-String).Trim()
         Write-Host "[NAS] Fehler (Versuch $attempt/$MaxAttempts): $msg" -ForegroundColor Red
         Clear-CredentialCache -CacheKey $CacheKey
         if ($attempt -ge $MaxAttempts) {
