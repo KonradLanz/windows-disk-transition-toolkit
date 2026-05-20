@@ -35,5 +35,4 @@ function Get-DiskPartitionMap {
     }
 
     $map | Sort-Object DiskNumber, Offset | Format-Table -AutoSize
-    return $map
 }
